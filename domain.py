@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import numpy.typing as npt
 import numpy as np
 
+from constants import ZETA, ETA, XI
+
 # Type hints for numpy arrays
 IndexT = np.int32
 RealT = np.float64
@@ -331,3 +333,119 @@ class Domain:
                     nidx += 1
                 nidx += 1
             nidx += edge_nodes
+
+    def setup_symmetry_planes(self, edge_nodes: int):
+        nidx = 0
+        for i in range(edge_nodes):
+            for j in range(edge_nodes):
+                if self.plane_loc == 0:
+                    self.symm_z[nidx] = i * edge_nodes + j
+                if self.row_loc == 0:
+                    self.symm_y[nidx] = i * edge_nodes * edge_nodes + j
+                if self.col_loc == 0:
+                    self.symm_x[nidx] = (i * edge_nodes * edge_nodes +
+                                         j * edge_nodes)
+                nidx += 1
+
+    def setup_element_connectivities(self, edge_elems: int):
+        self.lxim[0] = 0
+        self.lxim[1:self.numelem] = np.arange(self.numelem, dtype=IndexT)
+        self.lxip[0:self.numelem - 1] = np.arange(1,
+                                                  self.numelem + 1,
+                                                  dtype=IndexT)
+        self.lxip[self.numelem - 1] = self.numelem - 1
+
+        self.letam[:edge_elems] = np.arange(edge_elems, dtype=IndexT)
+        self.letap[self.numelem - edge_elems:] = np.arange(self.numelem -
+                                                           edge_elems,
+                                                           self.numelem,
+                                                           dtype=IndexT)
+        self.letam[edge_elems:] = np.arange(self.numelem - edge_elems,
+                                            dtype=IndexT)
+        self.letap[:self.numelem - edge_elems] = np.arange(edge_elems,
+                                                           self.numelem -
+                                                           edge_elems,
+                                                           dtype=IndexT)
+
+        self.lzetam[:edge_elems * edge_elems] = np.arange(edge_elems *
+                                                          edge_elems,
+                                                          dtype=IndexT)
+        self.lzetap[self.numelem - edge_elems * edge_elems:] = np.arange(
+            self.numelem - edge_elems * edge_elems, self.numelem, dtype=IndexT)
+        self.lzetam[edge_elems * edge_elems:] = np.arange(
+            self.numelem - edge_elems * edge_elems, dtype=IndexT)
+        self.lzetap[:self.numelem - edge_elems * edge_elems] = np.arange(
+            self.numelem - edge_elems * edge_elems, dtype=IndexT)
+
+    def setup_boundary_conditions(self, edge_elems):
+        # Fill with INT_MIN
+        ghost_idx = np.full((6, ), np.iinfo(IndexT).min, dtype=IndexT)
+
+        self.elem_bc[:] = 0
+
+        # assume communication to 6 neighbors by default
+        row_min = self.row_loc != 0
+        row_max = self.row_loc != (self.tp - 1)
+        col_min = self.col_loc != 0
+        col_max = self.col_loc != (self.tp - 1)
+        plane_min = self.plane_loc != 0
+        plane_max = self.plane_loc != (self.tp - 1)
+
+        pidx = self.numelem
+        for i, cond in enumerate(
+            (plane_min, plane_max, row_min, row_max, col_min, col_max)):
+            if cond:
+                ghost_idx[i] = pidx
+                pidx += edge_elems * edge_elems
+
+        # TODO(later): Vectorizing can be more efficient
+        # TODO(later): This can also be refactored as a loop
+        for i in range(edge_elems):
+            plane_inc = i * edge_elems * edge_elems
+            row_inc = i * edge_elems
+            for j in range(edge_elems):
+                if not plane_min:
+                    self.elem_bc[row_inc + j] |= ZETA['M']['SYMM']
+                else:
+                    self.elem_bc[row_inc + j] |= ZETA['M']['COMM']
+                    self.lzetam[row_inc + j] = ghost_idx[0] + row_inc + j
+
+                if not plane_max:
+                    self.elem_bc[row_inc + j + self.numelem -
+                                 edge_elems * edge_elems] |= ZETA['P']['FREE']
+                else:
+                    self.elem_bc[row_inc + j + self.numelem -
+                                 edge_elems * edge_elems] |= ZETA['P']['COMM']
+                    self.lzetap[row_inc + j + self.numelem - edge_elems *
+                                edge_elems] = ghost_idx[1] + row_inc + j
+
+                if not row_min:
+                    self.elem_bc[plane_inc + j] |= ETA['M']['SYMM']
+                else:
+                    self.elem_bc[plane_inc + j] |= ETA['M']['COMM']
+                    self.letam[plane_inc + j] = ghost_idx[2] + row_inc + j
+
+                if not row_max:
+                    self.elem_bc[plane_inc + j + edge_elems * edge_elems -
+                                 edge_elems] |= ETA['P']['FREE']
+                else:
+                    self.elem_bc[plane_inc + j + edge_elems * edge_elems -
+                                 edge_elems] |= ETA['P']['COMM']
+                    self.letap[plane_inc + j + edge_elems * edge_elems -
+                               edge_elems] = ghost_idx[3] + row_inc + j
+
+                if not col_min:
+                    self.elem_bc[plane_inc + j * edge_elems] |= XI['M']['SYMM']
+                else:
+                    self.elem_bc[plane_inc + j * edge_elems] |= XI['M']['COMM']
+                    self.lxim[plane_inc +
+                              j * edge_elems] = ghost_idx[4] + row_inc + j
+
+                if not col_max:
+                    self.elem_bc[plane_inc + j * edge_elems + edge_elems -
+                                 1] |= XI['P']['FREE']
+                else:
+                    self.elem_bc[plane_inc + j * edge_elems + edge_elems -
+                                 1] |= XI['P']['COMM']
+                    self.lxip[plane_inc + j * edge_elems + edge_elems -
+                              1] = ghost_idx[5] + row_inc + j
