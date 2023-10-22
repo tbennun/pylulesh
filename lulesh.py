@@ -217,7 +217,8 @@ def calc_elem_node_normals(pf: realarr, x: realarr, y: realarr, z: realarr):
 
 def sum_elem_stresses_to_node_forces(B: realarr, stress_xx: realarr,
                                      stress_yy: realarr, stress_zz: realarr):
-    return -stress_xx * B[:, 0], -stress_yy * B[:, 1], -stress_zz * B[:, 2]
+    return (-stress_xx[:, None] * B[:, 0], -stress_yy[:, None] * B[:, 1],
+            -stress_zz[:, None] * B[:, 2])
 
 
 def integrate_stress_for_elems(domain: Domain, sigxx: realarr, sigyy: realarr,
@@ -239,22 +240,23 @@ def integrate_stress_for_elems(domain: Domain, sigxx: realarr, sigyy: realarr,
 
 def volu_der(x: realarr, y: realarr, z: realarr, dvdx: realarr, dvdy: realarr,
              dvdz: realarr, in_indices: Tuple[int], out_index: int):
-    x0, x1, x2, x3, x4, x5 = x[:, in_indices]
-    y0, y1, y2, y3, y4, y5 = y[:, in_indices]
-    z0, z1, z2, z3, z4, z5 = z[:, in_indices]
+    x0, x1, x2, x3, x4, x5 = np.split(x[:, in_indices], 6, axis=1)
+    y0, y1, y2, y3, y4, y5 = np.split(y[:, in_indices], 6, axis=1)
+    z0, z1, z2, z3, z4, z5 = np.split(z[:, in_indices], 6, axis=1)
     twelfth = 1 / 12
-    dvdx[:, out_index] = twelfth * ((y1 + y2) * (z0 + z1) - (y0 + y1) *
-                                    (z1 + z2) + (y0 + y4) * (z3 + z4) -
-                                    (y3 + y4) * (z0 + z4) - (y2 + y5) *
-                                    (z3 + z5) + (y3 + y5) * (z2 + z5))
-    dvdy[:, out_index] = twelfth * (-(x1 + x2) * (z0 + z1) + (x0 + x1) *
-                                    (z1 + z2) - (x0 + x4) * (z3 + z4) +
-                                    (x3 + x4) * (z0 + z4) + (x2 + x5) *
-                                    (z3 + z5) - (x3 + x5) * (z2 + z5))
-    dvdz[:, out_index] = twelfth * (-(y1 + y2) * (x0 + x1) + (y0 + y1) *
-                                    (x1 + x2) - (y0 + y4) * (x3 + x4) +
-                                    (y3 + y4) * (x0 + x4) + (y2 + y5) *
-                                    (x3 + x5) - (y3 + y5) * (x2 + x5))
+    o = out_index
+    dvdx[:,
+         o:o + 1] = twelfth * ((y1 + y2) * (z0 + z1) - (y0 + y1) * (z1 + z2) +
+                               (y0 + y4) * (z3 + z4) - (y3 + y4) * (z0 + z4) -
+                               (y2 + y5) * (z3 + z5) + (y3 + y5) * (z2 + z5))
+    dvdy[:,
+         o:o + 1] = twelfth * (-(x1 + x2) * (z0 + z1) + (x0 + x1) * (z1 + z2) -
+                               (x0 + x4) * (z3 + z4) + (x3 + x4) * (z0 + z4) +
+                               (x2 + x5) * (z3 + z5) - (x3 + x5) * (z2 + z5))
+    dvdz[:,
+         o:o + 1] = twelfth * (-(y1 + y2) * (x0 + x1) + (y0 + y1) * (x1 + x2) -
+                               (y0 + y4) * (x3 + x4) + (y3 + y4) * (x0 + x4) +
+                               (y2 + y5) * (x3 + x5) - (y3 + y5) * (x2 + x5))
 
 
 def calc_elem_volume_derivative(x: realarr, y: realarr, z: realarr):
@@ -279,11 +281,11 @@ def calc_elem_fb_hourglass_force(xd: realarr, yd: realarr, zd: realarr,
     hgfz = np.ndarray([xd.shape[0], 8], dtype=xd.dtype)
 
     hxx = np.einsum('eji,ej->ei', hourgam, xd)
-    hgfx = coefficient * np.einsum('eji,ei->ej', hourgam, hxx)
+    hgfx = coefficient[:, None] * np.einsum('eji,ei->ej', hourgam, hxx)
     hxx = np.einsum('eji,ej->ei', hourgam, yd)
-    hgfy = coefficient * np.einsum('eji,ei->ej', hourgam, hxx)
+    hgfy = coefficient[:, None] * np.einsum('eji,ei->ej', hourgam, hxx)
     hxx = np.einsum('eji,ej->ei', hourgam, zd)
-    hgfz = coefficient * np.einsum('eji,ei->ej', hourgam, hxx)
+    hgfz = coefficient[:, None] * np.einsum('eji,ei->ej', hourgam, hxx)
 
     return hgfx, hgfy, hgfz
 
@@ -630,9 +632,9 @@ def calc_kinematics_for_elems(domain: Domain):
     B, det_J = calc_elem_shape_function_derivatives(x_local, y_local, z_local)
     D = calc_elem_velocity_gradient(xd_local, yd_local, zd_local, B, det_J)
 
-    domain.dxx[:] = D[:, 0]
-    domain.dyy[:] = D[:, 1]
-    domain.dzz[:] = D[:, 2]
+    domain.dxx = D[:, 0]
+    domain.dyy = D[:, 1]
+    domain.dzz = D[:, 2]
 
 
 def calc_lagrange_elements(domain: Domain):
@@ -761,17 +763,17 @@ def _calc_monotonic_q_region_bc(domain: Domain, bc: Dict[str, Dict[str, int]],
 
     # masked == *_FREE uses default value
     masked = bc_mask & bc['M']['mask']
-    delvm = np.select(
-        [masked == bc['M']['COMM'] | masked == 0, masked == bc['M']['SYMM']],
-        [delv[lm[ielem]], delv_ielem],
-        default=0)
+    delvm = np.select([(masked == bc['M']['COMM']) |
+                       (masked == 0), masked == bc['M']['SYMM']],
+                      [delv[lm[ielem]], delv_ielem],
+                      default=0)
 
     # masked == *_FREE uses default value
     masked = bc_mask & bc['P']['mask']
-    delvp = np.select(
-        [masked == bc['P']['COMM'] | masked == 0, masked == bc['P']['SYMM']],
-        [delv[lp[ielem]], delv_ielem],
-        default=0)
+    delvp = np.select([(masked == bc['P']['COMM']) |
+                       (masked == 0), masked == bc['P']['SYMM']],
+                      [delv[lp[ielem]], delv_ielem],
+                      default=0)
 
     delvm *= norm
     delvp *= norm
@@ -812,15 +814,15 @@ def calc_monotonic_q_region_for_elems(domain: Domain, r: int):
                                       delvx_eta**2 * (1 - phieta**2) + \
                                       delvx_zeta**2 * (1 - phizeta**2))
 
-    domain.qq = np.where(domain.vdov[ielem] > 0, 0, qquad)
-    domain.ql = np.where(domain.vdov[ielem] > 0, 0, qlin)
+    domain.qq[ielem] = np.where(domain.vdov[ielem] > 0, 0, qquad)
+    domain.ql[ielem] = np.where(domain.vdov[ielem] > 0, 0, qlin)
 
 
 def calc_monotonic_q_for_elems(domain: Domain):
     # Calculate monotonic q for all regions
     for r in range(domain.numregions):
         if domain.reg_elem_size[r] > 0:
-            calc_monotonic_q_region_for_elems(domain, r, ptiny)
+            calc_monotonic_q_region_for_elems(domain, r)
 
 
 def calc_q_for_elems(domain: Domain):
@@ -856,7 +858,7 @@ def calc_energy_for_elems(p_new: realarr, e_new: realarr, q_new: realarr,
                           p_cut: float, e_cut: float, q_cut: float,
                           emin: float, qq_old: realarr, ql_old: realarr,
                           rho0: float, eos_vmax: float, region_elems: intarr):
-    p_half_step = np.empty([region_elems.shape[1]], comp_half_step.dtype)
+    p_half_step = np.empty([region_elems.shape[0]], comp_half_step.dtype)
 
     e_new[:] = np.maximum(e_old - 0.5 * delvc * (p_old + q_old) + 0.5 * work,
                           emin)
@@ -912,11 +914,11 @@ def calc_sound_speed_for_elems(domain: Domain, vnewc_elem: realarr,
 
 def eval_eos_for_elems(domain: Domain, vnewc: realarr, region_elems: intarr,
                        rep: int):
-    bvc = np.empty([region_elems.shape[1]], RealT)
-    pbvc = np.empty([region_elems.shape[1]], RealT)
-    p_new = np.empty([region_elems.shape[1]], RealT)
-    e_new = np.empty([region_elems.shape[1]], RealT)
-    q_new = np.empty([region_elems.shape[1]], RealT)
+    bvc = np.empty([region_elems.shape[0]], RealT)
+    pbvc = np.empty([region_elems.shape[0]], RealT)
+    p_new = np.empty([region_elems.shape[0]], RealT)
+    e_new = np.empty([region_elems.shape[0]], RealT)
+    q_new = np.empty([region_elems.shape[0]], RealT)
 
     vnewc_elem = vnewc[region_elems]
 
@@ -925,12 +927,12 @@ def eval_eos_for_elems(domain: Domain, vnewc: realarr, region_elems: intarr,
     for _ in range(rep):
         # These temporaries will be of different size for each call,
         # due to different sized region element lists
-        e_old = domain.e[region_elems]
-        delvc = domain.delv[region_elems]
-        p_old = domain.p[region_elems]
-        q_old = domain.q[region_elems]
-        qq_old = domain.qq[region_elems]
-        ql_old = domain.ql[region_elems]
+        e_old = np.copy(domain.e[region_elems])
+        delvc = np.copy(domain.delv[region_elems])
+        p_old = np.copy(domain.p[region_elems])
+        q_old = np.copy(domain.q[region_elems])
+        qq_old = np.copy(domain.qq[region_elems])
+        ql_old = np.copy(domain.ql[region_elems])
         compression = 1 / vnewc_elem - 1
         vchalf = vnewc_elem - delvc * 0.5
         comp_half_step = 1 / vchalf - 1
@@ -938,21 +940,23 @@ def eval_eos_for_elems(domain: Domain, vnewc: realarr, region_elems: intarr,
         # NOTE: The following are impossible due to the clipping in
         # apply_material_properties_for_elems
         if domain.eos_vmin != 0:
-            comp_half_step[:] = np.where(vnewc <= domain.eos_vmin, compression,
-                                         comp_half_step)
+            comp_half_step[:] = np.where(vnewc_elem <= domain.eos_vmin,
+                                         compression, comp_half_step)
         if domain.eos_vmax != 0:
-            p_old[:] = np.where(vnewc >= domain.eos_vmax, 0, p_old)
-            compression[:] = np.where(vnewc >= domain.eos_vmax, 0, compression)
-            comp_half_step[:] = np.where(vnewc >= domain.eos_vmax, 0,
+            p_old[:] = np.where(vnewc_elem >= domain.eos_vmax, 0, p_old)
+            compression[:] = np.where(vnewc_elem >= domain.eos_vmax, 0,
+                                      compression)
+            comp_half_step[:] = np.where(vnewc_elem >= domain.eos_vmax, 0,
                                          comp_half_step)
 
-        work = np.zeros([region_elems.shape[1]], RealT)
+        work = np.zeros([region_elems.shape[0]], RealT)
 
         calc_energy_for_elems(p_new, e_new, q_new, bvc, pbvc, p_old, e_old,
-                              q_old, compression, comp_half_step, vnewc, work,
-                              delvc, domain.pmin, domain.p_cut, domain.e_cut,
-                              domain.q_cut, domain.emin, qq_old, ql_old,
-                              domain.refdens, domain.eos_vmax, region_elems)
+                              q_old, compression, comp_half_step, vnewc_elem,
+                              work, delvc, domain.pmin, domain.p_cut,
+                              domain.e_cut, domain.q_cut, domain.emin, qq_old,
+                              ql_old, domain.refdens, domain.eos_vmax,
+                              region_elems)
     # End of load imbalance loop
 
     domain.p[region_elems] = p_new

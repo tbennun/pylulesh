@@ -428,7 +428,7 @@ class Domain:
 
         # Second, allocate each region index set
         maxreg = np.max(self.reg_elem_size)
-        self.reg_elem_list = np.empty((nr, maxreg), dtype=IndexT)
+        self.reg_elem_list = np.zeros((nr, maxreg), dtype=IndexT)
         self.reg_elem_size[:] = 0
 
         # Third, fill index sets
