@@ -23,6 +23,7 @@ class Domain:
     # Array fields
     reg_elem_size: intarr  #: Number of elements in each region (1D)
     reg_elem_list: intarr  #: Region elements (2D)
+    reg_num_list: intarr  #: Region number per domain element (1D)
     ss: realarr  #: Sound speed (1D)
     elem_mass: realarr  #: Mass (1D)
     arealg: realarr  #: Element characteristic length (1D)
@@ -176,6 +177,9 @@ class Domain:
         # Initialize Sedov mesh
         self.numelem = int(edge_elems**3)
         self.numnode = int(edge_nodes**3)
+
+        # Material indexset
+        self.reg_num_list = np.zeros(self.numelem, dtype=IndexT)
 
         # Initialize element-centered fields
         self.allocate_elem_persistent()
@@ -333,6 +337,95 @@ class Domain:
                     nidx += 1
                 nidx += 1
             nidx += edge_nodes
+
+    def create_region_index_sets(self,
+                                 nr: int,
+                                 balance: int,
+                                 my_rank: int = 0):
+        # NOTE: This is not equivalent to srand(0) found in the original code,
+        #       but achieves the same effect
+        np.random.seed(1 + my_rank)
+
+        self.numregions = nr
+        self.reg_elem_size = np.empty(nr, dtype=IndexT)
+        next_index = 0
+
+        # Fill out the reg_num_list with material numbers, which are always
+        # the region index plus one
+        if nr == 1:
+            # If we only have one region, just fill it
+            self.reg_num_list[:] = 1
+            self.reg_elem_size[0] = 0
+        else:
+            region_num = -1
+            last_reg = -1
+            runto = 0
+            reg_bin_end = np.empty(self.numregions, dtype=int)
+
+            # Determine the relative weights of all the regions.
+            # This is based on the -b flag (balance).
+            self.reg_elem_size[:] = 0
+            # Total sum of all region weights
+            reg_bin_end[:] = np.arange(1, self.numregions + 1)**balance
+            cost_denominator = np.int64(np.sum(reg_bin_end))
+
+            # Until all elements are assigned
+            while next_index < self.numelem:
+                # Make sure we don't pick the same region twice in a row
+                while region_num == last_reg:
+                    # Pick the region
+                    region_var = np.random.randint(0, cost_denominator)
+                    i = 0
+                    while region_var >= reg_bin_end[i]:
+                        i += 1
+
+                    # NOTE from original implementation:
+                    # rotate the regions based on MPI rank.
+                    # Rotation is Rank % NumRegions this makes each domain have a
+                    # different region with the highest representation
+                    region_num = ((i + my_rank) % self.numregions) + 1
+
+                bin_size = np.random.randint(0, 1000)
+                if bin_size < 773:
+                    elements = np.random.randint(1, 16)
+                elif bin_size < 937:
+                    elements = np.random.randint(16, 32)
+                elif bin_size < 970:
+                    elements = np.random.randint(32, 64)
+                elif bin_size < 974:
+                    elements = np.random.randint(64, 128)
+                elif bin_size < 978:
+                    elements = np.random.randint(128, 256)
+                elif bin_size < 981:
+                    elements = np.random.randint(256, 512)
+                else:
+                    elements = np.random.randint(512, 2049)
+                runto = elements + next_index
+
+                # Store the elements. If we hit the end before we run out of
+                # elements then just stop.
+                while next_index < runto and next_index < self.numelem:
+                    self.reg_num_list[next_index] = region_num
+                    next_index += 1
+                last_reg = region_num
+
+        # Convert reg_num_list to region index sets
+        # First, count size of each region
+        for i in range(self.numelem):
+            r = self.reg_num_list[i] - 1  # Region index == regnum-1
+            self.reg_elem_size[r] += 1
+
+        # Second, allocate each region index set
+        maxreg = np.max(self.reg_elem_size)
+        self.reg_elem_list = np.empty((nr, maxreg), dtype=IndexT)
+        self.reg_elem_size[:] = 0
+
+        # Third, fill index sets
+        for i in range(self.numelem):
+            r = self.reg_num_list[i] - 1  # Region index == regnum-1
+            regndx = self.reg_elem_size[r]
+            self.reg_elem_size[r] += 1
+            self.reg_elem_list[r, regndx] = i
 
     def setup_symmetry_planes(self, edge_nodes: int):
         nidx = 0
