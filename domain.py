@@ -186,8 +186,7 @@ class Domain:
         # Initialize node-centered fields
         self.allocate_node_persistent()
 
-        # NOTE: In a distributed version, commmunication buffers would be set
-        # here
+        self.setup_comm_buffers(edge_nodes)
 
         # Basic field initialization
         self.e = np.zeros([self.numelem], RealT)
@@ -233,7 +232,7 @@ class Domain:
         volume = calc_elem_volume(x_local, y_local, z_local)
         self.volo[:] = volume
         self.elem_mass[:] = volume
-        self.nodal_mass[self.nodelist] += volume / 8
+        self.nodal_mass[self.nodelist] += (volume / 8)[:, np.newaxis]
 
         # Deposit initial energy
         # NOTE from original implementation:
@@ -338,6 +337,17 @@ class Domain:
                 nidx += 1
             nidx += edge_nodes
 
+    def setup_comm_buffers(self, edge_nodes: int):
+        # NOTE: In a distributed version, commmunication buffers would be set here
+
+        # Boundary nodesets
+        if self.col_loc == 0:
+            self.symm_x = np.empty(edge_nodes * edge_nodes, dtype=IndexT)
+        if self.row_loc == 0:
+            self.symm_y = np.empty(edge_nodes * edge_nodes, dtype=IndexT)
+        if self.plane_loc == 0:
+            self.symm_z = np.empty(edge_nodes * edge_nodes, dtype=IndexT)
+
     def create_region_index_sets(self,
                                  nr: int,
                                  balance: int,
@@ -366,8 +376,9 @@ class Domain:
             # This is based on the -b flag (balance).
             self.reg_elem_size[:] = 0
             # Total sum of all region weights
-            reg_bin_end[:] = np.arange(1, self.numregions + 1)**balance
-            cost_denominator = np.int64(np.sum(reg_bin_end))
+            region_weights = np.arange(1, self.numregions + 1)**balance
+            reg_bin_end = np.cumsum(region_weights)
+            cost_denominator = np.int64(np.sum(region_weights))
 
             # Until all elements are assigned
             while next_index < self.numelem:
@@ -442,9 +453,9 @@ class Domain:
 
     def setup_element_connectivities(self, edge_elems: int):
         self.lxim[0] = 0
-        self.lxim[1:self.numelem] = np.arange(self.numelem, dtype=IndexT)
+        self.lxim[1:self.numelem] = np.arange(self.numelem - 1, dtype=IndexT)
         self.lxip[0:self.numelem - 1] = np.arange(1,
-                                                  self.numelem + 1,
+                                                  self.numelem,
                                                   dtype=IndexT)
         self.lxip[self.numelem - 1] = self.numelem - 1
 
@@ -456,8 +467,7 @@ class Domain:
         self.letam[edge_elems:] = np.arange(self.numelem - edge_elems,
                                             dtype=IndexT)
         self.letap[:self.numelem - edge_elems] = np.arange(edge_elems,
-                                                           self.numelem -
-                                                           edge_elems,
+                                                           self.numelem,
                                                            dtype=IndexT)
 
         self.lzetam[:edge_elems * edge_elems] = np.arange(edge_elems *
