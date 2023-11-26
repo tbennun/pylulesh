@@ -232,7 +232,9 @@ class Domain:
         volume = calc_elem_volume(x_local, y_local, z_local)
         self.volo[:] = volume
         self.elem_mass[:] = volume
-        self.nodal_mass[self.nodelist] += (volume / 8)[:, np.newaxis]
+        for i in range(8):
+            nodelist = self.nodelist[:, i]
+            self.nodal_mass[nodelist] += (volume / 8)
 
         # Deposit initial energy
         # NOTE from original implementation:
@@ -478,7 +480,7 @@ class Domain:
         self.lzetam[edge_elems * edge_elems:] = np.arange(
             self.numelem - edge_elems * edge_elems, dtype=IndexT)
         self.lzetap[:self.numelem - edge_elems * edge_elems] = np.arange(
-            self.numelem - edge_elems * edge_elems, dtype=IndexT)
+            edge_elems * edge_elems, self.numelem, dtype=IndexT)
 
     def setup_boundary_conditions(self, edge_elems):
         # Fill with INT_MIN

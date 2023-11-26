@@ -61,10 +61,11 @@ def verify_and_write_final_output(elapsed_time: float,
             if max_abs_diff < absdiff:
                 max_abs_diff = absdiff
 
-            reldiff = absdiff / domain.e[k * nx + j]
+            if domain.e[k * nx + j] != 0.0:  # Note: Added to Python implementation to avoid warnings
+                reldiff = absdiff / domain.e[k * nx + j]
 
-            if max_rel_diff < reldiff:
-                max_rel_diff = reldiff
+                if max_rel_diff < reldiff:
+                    max_rel_diff = reldiff
 
     # Quick symmetry check
     print('   Testing Plane 0 of Energy Array on rank 0:')

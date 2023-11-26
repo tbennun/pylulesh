@@ -231,9 +231,11 @@ def integrate_stress_for_elems(domain: Domain, sigxx: realarr, sigyy: realarr,
         B, sigxx, sigyy, sigzz)
 
     # Accumulate local force contributions to global array
-    domain.fx[domain.nodelist] += fx_local
-    domain.fy[domain.nodelist] += fy_local
-    domain.fz[domain.nodelist] += fz_local
+    for i in range(8):
+        nodelist = domain.nodelist[:, i]
+        domain.fx[nodelist] += fx_local[:, i]
+        domain.fy[nodelist] += fy_local[:, i]
+        domain.fz[nodelist] += fz_local[:, i]
 
     return determ
 
@@ -336,9 +338,11 @@ def calc_fb_hourglass_force_for_elems(domain: Domain, determ: realarr,
     hgfx, hgfy, hgfz = calc_elem_fb_hourglass_force(xd1, yd1, zd1, hourgam,
                                                     coefficient)
 
-    domain.fx[domain.nodelist] += hgfx
-    domain.fy[domain.nodelist] += hgfy
-    domain.fz[domain.nodelist] += hgfz
+    for i in range(8):
+        nodelist = domain.nodelist[:, i]
+        domain.fx[nodelist] += hgfx[:, i]
+        domain.fy[nodelist] += hgfy[:, i]
+        domain.fz[nodelist] += hgfz[:, i]
 
 
 def calc_hourglass_control_for_elems(domain: Domain, determ: realarr,
@@ -1033,7 +1037,7 @@ def calc_courant_constraint_for_elems(domain: Domain, elems: intarr,
 
     dtf = domain.arealg[elems] / np.sqrt(dtf)
 
-    dtmin = np.min(np.where(vdov != 0, dtf, np.inf))
+    dtmin = np.min(np.where(vdov != 0, dtf, np.inf), initial=np.inf)
     if dtmin < dtcourant:
         return dtmin
 
@@ -1049,7 +1053,7 @@ def calc_hydro_constraint_for_elems(domain: Domain, elems: intarr,
     """
     vdov = domain.vdov[elems]
     dthydro_min = np.min(
-        np.where(vdov != 0, dvovmax / (np.abs(vdov) + 1e-20), np.inf))
+        np.where(vdov != 0, dvovmax / (np.abs(vdov) + 1e-20), np.inf), initial=np.inf)
     if dthydro_min < dthydro:
         return dthydro_min
     return dthydro
