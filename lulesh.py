@@ -848,7 +848,8 @@ def calc_pressure_for_elems(p_new: realarr, bvc: realarr, pbvc: realarr,
     bvc[:] = c1s * (compression + 1)
     pbvc[:] = c1s
 
-    p_new[:] = np.where(np.abs(p_new) < p_cut, 0, bvc * e_old)
+    p_new[:] = bvc * e_old
+    p_new[:] = np.where(np.abs(p_new) < p_cut, 0, p_new)
     # This condition may never happen
     p_new[:] = np.where(vnewc_elem >= eos_vmax, 0, p_new)
     p_new[:] = np.maximum(p_new, pmin)
@@ -879,8 +880,8 @@ def calc_energy_for_elems(p_new: realarr, e_new: realarr, q_new: realarr,
     e_new += 0.5 * delvc * (3 * (p_old + q_old) - 4 * (p_half_step + q_new))
 
     e_new += 0.5 * work
-    e_new = np.where(np.abs(e_new) < e_cut, 0, e_new)
-    e_new = np.maximum(e_new, emin)
+    e_new[:] = np.where(np.abs(e_new) < e_cut, 0, e_new)
+    e_new[:] = np.maximum(e_new, emin)
 
     # Modifies bvc, pbvc, p_new
     calc_pressure_for_elems(p_new, bvc, pbvc, e_new, compression, vnewc_elem,
@@ -893,8 +894,8 @@ def calc_energy_for_elems(p_new: realarr, e_new: realarr, q_new: realarr,
 
     e_new -= (7 * (p_old + q_old) - 8 * (p_half_step + q_new) +
               (p_new + q_tilde)) * delvc * sixth
-    e_new = np.where(np.abs(e_new) < e_cut, 0, e_new)
-    e_new = np.maximum(e_new, emin)
+    e_new[:] = np.where(np.abs(e_new) < e_cut, 0, e_new)
+    e_new[:] = np.maximum(e_new, emin)
 
     # Modifies bvc, pbvc, p_new
     calc_pressure_for_elems(p_new, bvc, pbvc, e_new, compression, vnewc_elem,
