@@ -69,9 +69,9 @@ def verify_and_write_final_output(elapsed_time: float,
 
     # Quick symmetry check
     print('   Testing Plane 0 of Energy Array on rank 0:')
-    print(f'        MaxAbsDiff   = {max_abs_diff:.6f}')
-    print(f'        TotalAbsDiff = {total_abs_diff:.6f}')
-    print(f'        MaxRelDiff   = {max_rel_diff:.6f}')
+    print(f'        MaxAbsDiff   = {max_abs_diff:.6e}')
+    print(f'        TotalAbsDiff = {total_abs_diff:.6e}')
+    print(f'        MaxRelDiff   = {max_rel_diff:.6e}')
 
     # Timing information
     print()
