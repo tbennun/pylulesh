@@ -806,9 +806,9 @@ def calc_monotonic_q_region_for_elems(domain: Domain, r: int):
                                           domain.lzetap)
 
     # Remove length scale
-    delvx_xi = np.maximum(0, domain.delv_xi[ielem] * domain.delx_xi[ielem])
-    delvx_eta = np.maximum(0, domain.delv_eta[ielem] * domain.delx_eta[ielem])
-    delvx_zeta = np.maximum(0,
+    delvx_xi = np.minimum(0, domain.delv_xi[ielem] * domain.delx_xi[ielem])
+    delvx_eta = np.minimum(0, domain.delv_eta[ielem] * domain.delx_eta[ielem])
+    delvx_zeta = np.minimum(0,
                             domain.delv_zeta[ielem] * domain.delx_zeta[ielem])
     rho = domain.elem_mass[ielem] / (domain.volo[ielem] * domain.vnew[ielem])
     qlin = -domain.qlc_monoq * rho * (delvx_xi * (1 - phixi) + \
