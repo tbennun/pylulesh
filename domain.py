@@ -1,4 +1,4 @@
-# Copyright 2022 Tal Ben-Nun. All rights reserved. See LICENSE.md for full license.
+# See LICENSE.md for full license.
 """
 File containing the primary data structure used in LULESH.
 """
